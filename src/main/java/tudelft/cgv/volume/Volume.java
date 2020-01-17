@@ -76,7 +76,7 @@ public class Volume {
     }
 
 
-    float a = -0.75f; // global variable that defines the value of a used in cubic interpolation.
+    float a = -0.5f; // global variable that defines the value of a used in cubic interpolation.
     // you need to chose the right value
         
     //////////////////////////////////////////////////////////////////////
@@ -101,7 +101,7 @@ public class Volume {
     // We assume the out of bounce checks have been done earlier
     
     public float cubicinterpolate(float g0, float g1, float g2, float g3, float factor) {
-        float result = a*factor*((factor*(-g0+3*g1-3*g2+g3)+2*g0-5*g1+4*g2-g3)*factor+factor*(-g0+g2))+g1;
+        float result = -a*factor*((factor*(-g0+3*g1-3*g2+g3)+2*g0-5*g1+4*g2-g3)*factor+factor*(-g0+g2))+g1;
         return result;
     }
         
@@ -111,12 +111,19 @@ public class Volume {
     // 2D cubic interpolation implemented here. We do it for plane XY. Coord contains the position.
     // We assume the out of bounce checks have been done earlier
     public float bicubicinterpolateXY(double[] coord,int z) {
-            
-        // to be implemented              
-        
-        float result = 1.0f;
+
+        int x = (int) Math.floor(coord[0]);
+        int y = (int) Math.floor(coord[1]);
+
+        float fac_x = (float) coord[0] - x;
+        float fac_y = (float) coord[1] - y;
+
+        float t0 = cubicinterpolate(getVoxel(x-1, y-1, z), getVoxel(x, y-1, z), getVoxel(x+1, y-1, z), getVoxel(x+2, y-1, z), fac_x);
+        float t1 = cubicinterpolate(getVoxel(x-1, y, z), getVoxel(x, y, z),getVoxel(x+1, y, z), getVoxel(x+2, y, z), fac_x);
+        float t2 = cubicinterpolate(getVoxel(x-1, y+1, z), getVoxel(x, y+1, z), getVoxel(x+1, y+1, z), getVoxel(x+2, y+1, z), fac_x);
+        float t3 = cubicinterpolate(getVoxel(x-1, y+2, z), getVoxel(x, y+2, z), getVoxel(x+1, y+2, z), getVoxel(x+2, y+2, z), fac_x);
                             
-        return result; 
+        return cubicinterpolate(t0,t1,t2,t3,fac_y);
 
     }
             
@@ -130,27 +137,16 @@ public class Volume {
                 || coord[2] < 1 || coord[2] > (dimZ-3)) {
             return 0;
         }
-        int x = (int) Math.floor(coord[0]);
-        int y = (int) Math.floor(coord[1]);
         int z = (int) Math.floor(coord[2]);
 
-        float fac_x = (float) coord[0] - x;
-        float fac_y = (float) coord[1] - y;
         float fac_z = (float) coord[2] - z;
 
-        float t0 = interpolate(getVoxel(x, y, z), getVoxel(x+1, y, z), fac_x);
-        float t1 = interpolate(getVoxel(x, y+1, z), getVoxel(x+1, y+1, z), fac_x);
-        float t2 = interpolate(getVoxel(x, y, z+1), getVoxel(x+1, y, z+1), fac_x);
-        float t3 = interpolate(getVoxel(x, y+1, z+1), getVoxel(x+1, y+1, z+1), fac_x);
-        float t4 = interpolate(t0, t1, fac_y);
-        float t5 = interpolate(t2, t3, fac_y);
-        float t6 = interpolate(t4, t5, fac_z);
+        float t0=bicubicinterpolateXY(coord, z-1);
+        float t1=bicubicinterpolateXY(coord, z);
+        float t2=bicubicinterpolateXY(coord, z+1);
+        float t3=bicubicinterpolateXY(coord, z+2);
 
-        return t6;
-        //float result = 1.0f;
-                            
-        //return result;
-        
+        return Math.min(255, Math.max(0, cubicinterpolate(t0,t1,t2,t3, fac_z)));
 
     }
 
