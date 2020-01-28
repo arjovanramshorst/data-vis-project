@@ -221,7 +221,7 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
         //We define the light vector as directed toward the view point (which is the source of the light)
         // another light vector would be possible
          VectorMath.setVector(lightVector, rayVector[0], rayVector[1], rayVector[2]);
-       
+
         // To be Implemented
               
         //Initialization of the colors as floating point values
@@ -263,12 +263,18 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
     //ray must be sampled with a distance defined by the sampleStep
    
     public int traceRayComposite(double[] entryPoint, double[] exitPoint, double[] rayVector, double sampleStep) {
-        double[] lightVector = new double[3];
-        
-        //the light vector is directed toward the view point (which is the source of the light)
-        // another light vector would be possible 
-        VectorMath.setVector(lightVector, rayVector[0], rayVector[1], rayVector[2]);
-        
+        //compute the increment and the number of samples
+        double[] increments = new double[3];
+        VectorMath.setVector(increments, rayVector[0] * sampleStep, rayVector[1] * sampleStep, rayVector[2] * sampleStep);
+
+        // Compute the number of times we need to sample
+        double distance = VectorMath.distance(entryPoint, exitPoint);
+        int nrSamples = 1 + (int) Math.floor(VectorMath.distance(entryPoint, exitPoint) / sampleStep);
+
+        //the current position is initialized as the entry point
+        double[] currentPos = new double[3];
+        VectorMath.setVector(currentPos, entryPoint[0], entryPoint[1], entryPoint[2]);
+
         //Initialization of the colors as floating point values
         double r, g, b;
         r = g = b = 0.0;
@@ -276,15 +282,36 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
         double opacity = 0;
         
         
-        TFColor voxel_color = new TFColor();
+        TFColor voxel_color = new TFColor(); //This two variables are supposed to be used to store the color
         TFColor colorAux = new TFColor();
         
         // To be Implemented this function right now just gives back a constant color depending on the mode
-        
+
         if (compositingMode) {
             // 1D transfer function 
-            voxel_color.r = 1;voxel_color.g =0;voxel_color.b =0;voxel_color.a =1;
-            opacity = 1;
+            voxel_color.r = 1;voxel_color.g =1;voxel_color.b =1;voxel_color.a =1;  //This variables are the components of the color vector, but
+            //r=g=b so we only have to calculate it one time. I set the initial to value to white, if we set the initial a=0 then everything goes black.
+//            opacity = 0; //This one should update voxel_color.a
+            //This is what they said in the  code above
+            // Alternatively, apply the transfer function to obtain a color using the tFunc attribute
+            // colorAux= tFunc.getColor(val);
+            // pixelColor.r=colorAux.r;pixelColor.g=colorAux.g;pixelColor.b=colorAux.b;pixelColor.a=colorAux.a;
+            // IMPORTANT: You can also simply use pixelColor = tFunc.getColor(val); However then you copy by reference and this means that if you change
+            // pixelColor you will be actually changing the transfer function So BE CAREFUL when you do this kind of assignments
+            do {
+                int value = (int)volume.getVoxelLinearInterpolate(currentPos); //This value is the intensity
+                colorAux=tFunc.getColor(value); //Somehow this should calculate the color of the current pixel
+                // After this we should calculate the C' as
+                // C'= prev_color*prev_opacity+(1-prev_opacity)*current_color*current_opacity
+                //then C'=current_color
+                voxel_color.r = colorAux;voxel_color.g =colorAux;voxel_color.b =colorAux;voxel_color.a =colorAux;
+                for (int i = 0; i < 3; i++) { //This part will move to the next pixel
+                    currentPos[i] += increments[i];
+                }
+                // All the currents become previous
+                nrSamples--;
+            } while (nrSamples > 0);
+
         }    
         if (tf2dMode) {
              // 2D transfer function 
@@ -301,7 +328,7 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
         g = voxel_color.g ;
         b = voxel_color.b;
         alpha = opacity ;
-            
+
         //computes the color
         int color = computeImageColor(r,g,b,alpha);
         return color;
