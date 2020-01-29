@@ -279,11 +279,18 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
     // Given the current sample position, increment vector of the sample (vector from previous sample to current sample) and sample Step. 
     // Previous sample value and current sample value, isovalue value
     // The function should search for a position where the iso_value passes that it is more precise.
-    public double[] bisection_accuracy(double[] currentPos, double[] increments, double sampleStep, float previousvalue, float value, float iso_value) {
+    public double[] bisection_accuracy(double[] currentPos, double[] increments, double sampleStep, float previousValue, float value, float iso_value) {
+
+        // This function only works if the previousValue is below the iso value, and the next value is above the iso
+        // value, if that is not the case, immediately return the current position.
+        if (previousValue > iso_value || value < iso_value) {
+            return currentPos;
+        }
+
         // Max number of iterations for bisect
         int maxIterations = 50;
-        // Tolerance for success
-        double tolerance = sampleStep;
+        // Tolerance for success (maybe relate this to sample step, so accuracy becomes better after increasing resolution?)
+        double tolerance = 0.1;
 
         // No need to check which one is which, since currentPos is always called immediately after currentPos
         // is > isoValue and prevPos is < isoValue.
@@ -291,14 +298,11 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
         double[] endPos = {currentPos[0], currentPos[1], currentPos[2]};
         double[] middlePos = new double[3];
 
-
         float middleValue;
 
         for (int i = 0; i < maxIterations; i++) {
-            // Get center of vector
+            // Get position and value for vector between the start position and end position vectors.
             VectorMath.setVector(middlePos, (startPos[0] + endPos[0]) / 2, (startPos[1] + endPos[1]) / 2, (startPos[2] + endPos[2]) / 2);
-
-            // Tricubic?
             middleValue = volume.getVoxelTriCubicInterpolate(middlePos);
 
             if (Math.abs(middleValue - iso_value) < tolerance) {
@@ -351,46 +355,42 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
         compColor.b = 0;
         compColor.a = 0;
 
-        if (compositingMode) {
-            // 1D transfer function
-            for (int i = 0; i < nrSamples; i++) {
-                // Get the intensity of the current voxel
-                int value = (int) volume.getVoxelLinearInterpolate(currentPos);
+        // 1D transfer function
+        for (int i = 0; i < nrSamples; i++) {
+            // Get the intensity of the current voxel
+            int value = (int) volume.getVoxelLinearInterpolate(currentPos);
 
-                // Get color of current position
-                TFColor currentColor = tFunc.getColor(value);
+            // Get color of current position
+            TFColor currentColor = tFunc.getColor(value);
 
-//                if (tf2dMode) {
-//                    // TODO: implement
-//                    currentColor.a = currentColor.a; // computeOpacity2DTF()
-//                }
+            if (tf2dMode || shadingMode) {
+                VoxelGradient gradient = gradients.getGradient(currentPos);
+                if (tf2dMode) {
+                    // Get selected color from transferfunction
+                    currentColor.r = tFunc2D.color.r;
+                    currentColor.g = tFunc2D.color.g;
+                    currentColor.b = tFunc2D.color.b;
+                    // Calculate correct opacity
+                    currentColor.a = computeOpacity2DTF(0, 0, value, gradient.mag);
+                }
 
                 if (shadingMode) {
-                    VoxelGradient gradient = gradients.getGradient(currentPos);
 
                     // Overwrite current color with the corresponding phongShading color
                     currentColor = computePhongShading(currentColor, gradient, lightVector, rayVector);
                 }
-
-                // Calculate accumulated color for current position
-                compColor.r = (currentColor.a * currentColor.r) + (1 - currentColor.a) * compColor.r;
-                compColor.g = (currentColor.a * currentColor.g) + (1 - currentColor.a) * compColor.g;
-                compColor.b = (currentColor.a * currentColor.b) + (1 - currentColor.a) * compColor.b;
-                compColor.a = currentColor.a + (1 - currentColor.a) * compColor.a;
-
-                // Move position to next voxel
-                for (int j = 0; j < 3; j++) {
-                    currentPos[j] += increments[j];
-                }
             }
-        }
 
-        if (tf2dMode) {
-            // 2D transfer function
-            compColor.r = 0;
-            compColor.g = 1;
-            compColor.b = 0;
-            compColor.a = 1;
+            // Calculate accumulated color for current position
+            compColor.r = (currentColor.a * currentColor.r) + (1 - currentColor.a) * compColor.r;
+            compColor.g = (currentColor.a * currentColor.g) + (1 - currentColor.a) * compColor.g;
+            compColor.b = (currentColor.a * currentColor.b) + (1 - currentColor.a) * compColor.b;
+            compColor.a = currentColor.a + (1 - currentColor.a) * compColor.a;
+
+            // Move position to next voxel
+            for (int j = 0; j < 3; j++) {
+                currentPos[j] += increments[j];
+            }
         }
 
         // Return the color calculated as an integer for the render engine.
@@ -565,10 +565,18 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
 // tFunc2D.baseIntensity, tFunc2D.radius they are in image intensity units
     public double computeOpacity2DTF(double material_value, double material_r,
                                      double voxelValue, double gradMagnitude) {
-
         double opacity = 0.0;
+        double maxMagnitude = gradients.getMaxGradientMagnitude();
 
-        // to be implemented
+        // Normalize values to quickly check if point is in the triangle
+        double distanceToCenter = Math.abs(voxelValue - tFunc2D.baseIntensity);
+        double coordinateNormR = distanceToCenter / gradMagnitude;
+        double normR = tFunc2D.radius / maxMagnitude;
+
+        if (Math.abs(normR) > Math.abs(coordinateNormR)) {
+            // Set opacity to 1 if on centerline, set to 0 if close to edge of diagonal
+            opacity = tFunc2D.color.a * (1 - coordinateNormR / normR);
+        }
 
         return opacity;
     }
