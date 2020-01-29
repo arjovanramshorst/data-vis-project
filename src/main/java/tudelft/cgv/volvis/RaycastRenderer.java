@@ -329,17 +329,17 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
     // Ray must be sampled with a distance defined by the sampleStep
     public int traceRayComposite(double[] entryPoint, double[] exitPoint, double[] rayVector, double sampleStep) {
 
-        // Calculate the increment vector
+        // Calculate the increment vector starting at the end.
         double[] increments = new double[3];
-        VectorMath.setVector(increments, rayVector[0] * sampleStep, rayVector[1] * sampleStep, rayVector[2] * sampleStep);
+        computeIncrementsB2F(increments, rayVector, sampleStep);
 
         // Compute the number of times we need to sample
         double distance = VectorMath.distance(entryPoint, exitPoint);
         int nrSamples = 1 + (int) Math.floor(distance / sampleStep);
 
-        // Set entry point as current position
+        // Set exit point as current position
         double[] currentPos = new double[3];
-        VectorMath.setVector(currentPos, entryPoint[0], entryPoint[1], entryPoint[2]);
+        VectorMath.setVector(currentPos, exitPoint);
 
         // We define the light vector as directed toward the view point (which is the source of the light)
         // another light vector would be possible
@@ -358,7 +358,7 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
         // 1D transfer function
         for (int i = 0; i < nrSamples; i++) {
             // Get the intensity of the current voxel
-            int value = (int) volume.getVoxelLinearInterpolate(currentPos);
+            int value = (int) volume.getVoxelTriCubicInterpolate(currentPos);
 
             // Get color of current position
             TFColor currentColor = tFunc.getColor(value);
@@ -374,7 +374,7 @@ public class RaycastRenderer extends Renderer implements TFChangeListener {
                     currentColor.a = computeOpacity2DTF(0, 0, value, gradient.mag);
                 }
 
-                if (shadingMode) {
+                if (shadingMode && currentColor.a > 0) {
 
                     // Overwrite current color with the corresponding phongShading color
                     currentColor = computePhongShading(currentColor, gradient, lightVector, rayVector);
