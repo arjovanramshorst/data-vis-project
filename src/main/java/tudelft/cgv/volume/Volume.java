@@ -146,6 +146,7 @@ public class Volume {
         float t2=bicubicinterpolateXY(coord, z+1);
         float t3=bicubicinterpolateXY(coord, z+2);
 
+        // Clamp values between 0 and 255
         return Math.min(255, Math.max(0, cubicinterpolate(t0,t1,t2,t3, fac_z)));
 
     }

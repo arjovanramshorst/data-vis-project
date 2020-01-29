@@ -21,6 +21,12 @@ public class VectorMath {
         v[2] = c2;
     }
 
+    public static void setVector(double[] v, double[] c) {
+        for (int i = 0; i < v.length; i++) {
+            v[i] = c[i];
+        }
+    }
+
     // compute dotproduct of vectors v and w
     public static double dotproduct(double[] v, double[] w) {
         double r = 0;
